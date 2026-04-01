@@ -120,7 +120,7 @@ async function run() {
         // ============================
         // 📦 PRODUCTS
         // ============================
-        app.post('/products', verifyToken, async (req, res) => {
+        app.post('/products', async (req, res) => {
             const p = req.body;
 
             const result = await products.insertOne({
@@ -139,7 +139,7 @@ async function run() {
             res.send({ success: true, result });
         });
 
-        app.get('/products', verifyToken, async (req, res) => {
+        app.get('/products', async (req, res) => {
             const result = await products.find().toArray();
             res.send(result);
         });
@@ -181,7 +181,7 @@ async function run() {
             res.send({ success: true });
         });
 
-        app.delete('/products/:id', verifyToken, async (req, res) => {
+        app.delete('/products/:id',  async (req, res) => {
             const result = await products.deleteOne({
                 _id: new ObjectId(req.params.id)
             });
@@ -210,7 +210,7 @@ async function run() {
         // ============================
         // 💰 SALES
         // ============================
-        app.get('/sales', verifyToken, async (req, res) => {
+        app.get('/sales', async (req, res) => {
             const result = await sales.find().toArray();
             res.send(result);
         });
@@ -254,7 +254,7 @@ async function run() {
             res.send(result);
         });
 
-        app.get('/receivables', verifyToken, async (req, res) => {
+        app.get('/receivables', async (req, res) => {
             const result = await receivables.find().toArray();
             res.send(result);
         });
@@ -262,18 +262,44 @@ async function run() {
         // ============================
         // 💳 TRANSACTIONS
         // ============================
-        app.post('/transactions', async (req, res) => {
-            const t = req.body;
+        // ================= EXPENSE =================
+        app.get("/expenses", async (req, res) => {
+            const result = await db.collection("expenses").find().toArray();
+            res.send(result);
+        });
 
-            await transactions.insertOne(t);
+        app.post("/expenses", async (req, res) => {
+            const data = req.body;
+            const result = await db.collection("expenses").insertOne(data);
+            res.send(result);
+        });
 
-            if (t.type === "loan") {
-                await cashCollection.updateOne({}, { $inc: { amount: t.amount } }, { upsert: true });
-            } else {
-                await cashCollection.updateOne({}, { $inc: { amount: -t.amount } }, { upsert: true });
-            }
+        app.delete("/expenses/:id", async (req, res) => {
+            const id = req.params.id;
+            const result = await db.collection("expenses").deleteOne({ _id: new ObjectId(id) });
+            res.send(result);
+        });
 
-            res.send({ success: true });
+
+        // ================= TRANSACTIONS =================
+        app.get("/transactions", async (req, res) => {
+            const result = await db.collection("transactions").find().toArray();
+            res.send(result);
+        });
+
+        app.post("/transactions", async (req, res) => {
+            const data = req.body;
+            const result = await db.collection("transactions").insertOne({
+                ...data,
+                createdAt: new Date()
+            });
+            res.send(result);
+        });
+
+        app.delete("/transactions/:id", async (req, res) => {
+            const id = req.params.id;
+            const result = await db.collection("transactions").deleteOne({ _id: new ObjectId(id) });
+            res.send(result);
         });
 
         // ============================
@@ -287,7 +313,7 @@ async function run() {
         // ============================
         // 📊 DASHBOARD
         // ============================
-        app.get('/dashboard', verifyToken, async (req, res) => {
+        app.get('/dashboard',  async (req, res) => {
 
             const p = await products.find().toArray();
             const s = await sales.find().toArray();
