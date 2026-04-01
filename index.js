@@ -33,19 +33,6 @@ const client = new MongoClient(uri, {
 });
 
 // ============================
-// ✅ JWT
-// ============================
-app.post("/jwt", (req, res) => {
-    const user = req.body;
-
-    const token = jwt.sign(user, process.env.JWT_SECRET, {
-        expiresIn: "7d"
-    });
-
-    res.send({ token });
-});
-
-// ============================
 // 🚀 MAIN FUNCTION
 // ============================
 async function run() {
@@ -61,7 +48,8 @@ async function run() {
         const receivables = db.collection("receivables");
         const transactions = db.collection("transactions");
         const cashCollection = db.collection("cash");
-        const carts = db.collection("carts"); // ✅ FIX
+        const users = db.collection("users");
+        const carts = db.collection("carts");
 
         // ============================
         // 🔐 VERIFY TOKEN
@@ -86,6 +74,50 @@ async function run() {
         };
 
         // ============================
+        // 🔑 JWT
+        // ============================
+        app.post('/jwt', (req, res) => {
+            const user = req.body;
+
+            const token = jwt.sign(user, process.env.JWT_SECRET, {
+                expiresIn: '1h'
+            });
+
+            res.send({ token });
+        });
+
+        // ============================
+        //  Admin
+        // ============================
+        app.get('/users/admin/:email', verifyToken, async (req, res) => {
+            const email = req.params.email;
+
+            if (email !== req.user.email) {
+                return res.status(403).send({ message: "Forbidden" });
+            }
+
+            const user = await users.findOne({ email });
+
+            res.send({ admin: user?.role === 'admin' });
+        });
+
+        // ============================
+        // 👤 USERS
+        // ============================
+        app.post('/users', async (req, res) => {
+            const user = req.body;
+
+            const existing = await users.findOne({ email: user.email });
+
+            if (existing) {
+                return res.send({ message: "User already exists" });
+            }
+
+            const result = await users.insertOne(user);
+            res.send({ success: true, result });
+        });
+
+        // ============================
         // 📦 PRODUCTS
         // ============================
         app.post('/products', verifyToken, async (req, res) => {
@@ -104,23 +136,24 @@ async function run() {
                 image: p.image || ""
             });
 
-            res.send(result);
+            res.send({ success: true, result });
         });
 
         app.get('/products', verifyToken, async (req, res) => {
-            try {
-                const result = await products.find().toArray();
-                res.send(result);
-            } catch (err) {
-                res.status(500).send({ error: "Failed to get products" });
-            }
+            const result = await products.find().toArray();
+            res.send(result);
         });
 
         app.get('/products/:id', async (req, res) => {
-            const result = await products.findOne({
+            const product = await products.findOne({
                 _id: new ObjectId(req.params.id)
             });
-            res.send(result);
+
+            if (!product) {
+                return res.status(404).send({ message: "Product not found" });
+            }
+
+            res.send(product);
         });
 
         app.patch('/products/:id', async (req, res) => {
@@ -141,18 +174,27 @@ async function run() {
                 { $set: updated }
             );
 
-            res.send(result);
+            if (result.matchedCount === 0) {
+                return res.status(404).send({ message: "Product not found" });
+            }
+
+            res.send({ success: true });
         });
 
         app.delete('/products/:id', verifyToken, async (req, res) => {
             const result = await products.deleteOne({
                 _id: new ObjectId(req.params.id)
             });
-            res.send(result);
+
+            if (result.deletedCount === 0) {
+                return res.status(404).send({ message: "Product not found" });
+            }
+
+            res.send({ message: "Deleted successfully" });
         });
 
         // ============================
-        // 🛒 CARTS (FIXED)
+        // 🛒 CARTS
         // ============================
         app.get('/carts', async (req, res) => {
             const email = req.query.email;
@@ -168,7 +210,7 @@ async function run() {
         // ============================
         // 💰 SALES
         // ============================
-        app.get('/sales', async (req, res) => {
+        app.get('/sales', verifyToken, async (req, res) => {
             const result = await sales.find().toArray();
             res.send(result);
         });
@@ -212,7 +254,7 @@ async function run() {
             res.send(result);
         });
 
-        app.get('/receivables', async (req, res) => {
+        app.get('/receivables', verifyToken, async (req, res) => {
             const result = await receivables.find().toArray();
             res.send(result);
         });
@@ -245,7 +287,7 @@ async function run() {
         // ============================
         // 📊 DASHBOARD
         // ============================
-        app.get('/dashboard', async (req, res) => {
+        app.get('/dashboard', verifyToken, async (req, res) => {
 
             const p = await products.find().toArray();
             const s = await sales.find().toArray();
@@ -280,7 +322,7 @@ async function run() {
         });
 
     } catch (error) {
-        console.log("❌ MongoDB Error:", error);
+        console.log("❌ Error:", error);
     }
 }
 
