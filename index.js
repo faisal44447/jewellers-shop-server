@@ -133,14 +133,19 @@ async function run() {
                 buyPrice: Number(p.buyPrice),
                 sellPrice: 0,
                 status: "stock",
-                image: p.image || ""
+                image: p.image || "",
+                createdAt: new Date()
             });
 
             res.send({ success: true, result });
         });
 
         app.get('/products', async (req, res) => {
-            const result = await products.find().toArray();
+            const result = await products
+                .find()
+                .sort({ createdAt: -1 })
+                .toArray();
+
             res.send(result);
         });
 
@@ -181,7 +186,7 @@ async function run() {
             res.send({ success: true });
         });
 
-        app.delete('/products/:id',  async (req, res) => {
+        app.delete('/products/:id', async (req, res) => {
             const result = await products.deleteOne({
                 _id: new ObjectId(req.params.id)
             });
@@ -238,39 +243,48 @@ async function run() {
             res.send({ success: true });
         });
 
+        app.delete("/sales/:id", async (req, res) => {
+            const id = req.params.id;
+
+            const result = await sales.deleteOne({
+                _id: new ObjectId(id)
+            });
+
+            res.send(result);
+        });
+
         // ============================
         // 💸 EXPENSE
         // ============================
-        app.post('/expenses', async (req, res) => {
-            const result = await expenses.insertOne(req.body);
-            res.send(result);
-        });
-
-        // ============================
-        // 💵 RECEIVABLE
-        // ============================
-        app.post('/receivables', async (req, res) => {
-            const result = await receivables.insertOne(req.body);
-            res.send(result);
-        });
-
-        app.get('/receivables', async (req, res) => {
-            const result = await receivables.find().toArray();
-            res.send(result);
-        });
-
-        // ============================
-        // 💳 TRANSACTIONS
-        // ============================
-        // ================= EXPENSE =================
-        app.get("/expenses", async (req, res) => {
-            const result = await db.collection("expenses").find().toArray();
-            res.send(result);
-        });
-
         app.post("/expenses", async (req, res) => {
             const data = req.body;
-            const result = await db.collection("expenses").insertOne(data);
+
+            const result = await db.collection("expenses").insertOne({
+                ...data,
+                createdAt: new Date()
+            });
+
+            res.send(result);
+        });
+
+        app.get("/expenses", async (req, res) => {
+            const result = await db.collection("expenses")
+                .find()
+                .sort({ createdAt: -1 })
+                .toArray();
+
+            res.send(result);
+        });
+
+        app.patch("/expenses/:id", async (req, res) => {
+            const id = req.params.id;
+            const updated = req.body;
+
+            const result = await db.collection("expenses").updateOne(
+                { _id: new ObjectId(id) },
+                { $set: updated }
+            );
+
             res.send(result);
         });
 
@@ -280,10 +294,65 @@ async function run() {
             res.send(result);
         });
 
+        // ============================
+        // 💵 RECEIVABLE
+        // ============================
+        app.post('/receivables', async (req, res) => {
+            const data = req.body;
 
-        // ================= TRANSACTIONS =================
+            const result = await receivables.insertOne({
+                ...data,
+                createdAt: data.createdAt ? new Date(data.createdAt) : new Date()
+            });
+
+            res.send(result);
+        });
+
+        app.get('/receivables', async (req, res) => {
+            const result = await receivables.find().sort({ createdAt: -1 }).toArray();
+            res.send(result);
+        });
+
+        // ❌ DELETE RECEIVABLE
+        app.delete("/receivables/:id", async (req, res) => {
+            const id = req.params.id;
+
+            const result = await receivables.deleteOne({
+                _id: new ObjectId(id)
+            });
+
+            res.send(result);
+        });
+
+        // ✏️ UPDATE RECEIVABLE
+        app.patch("/receivables/:id", async (req, res) => {
+            const id = req.params.id;
+            const data = req.body;
+
+            const result = await receivables.updateOne(
+                { _id: new ObjectId(id) },
+                {
+                    $set: {
+                        name: data.name,
+                        amount: Number(data.amount),
+                        createdAt: new Date()
+                    }
+                }
+            );
+
+            res.send(result);
+        });
+
+        // ============================
+        // 💳 TRANSACTIONS
+        // ============================
+
         app.get("/transactions", async (req, res) => {
-            const result = await db.collection("transactions").find().toArray();
+            const result = await db.collection("transactions")
+                .find()
+                .sort({ createdAt: -1 })
+                .toArray();
+
             res.send(result);
         });
 
@@ -313,7 +382,7 @@ async function run() {
         // ============================
         // 📊 DASHBOARD
         // ============================
-        app.get('/dashboard',  async (req, res) => {
+        app.get('/dashboard', async (req, res) => {
 
             const p = await products.find().toArray();
             const s = await sales.find().toArray();
