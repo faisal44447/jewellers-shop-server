@@ -1,44 +1,41 @@
-require('dotenv').config();
-
 const express = require('express');
 const app = express();
 const cors = require('cors');
-const jwt = require("jsonwebtoken");
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
 
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const port = process.env.PORT || 5000;
 
-// ============================
-// ✅ MIDDLEWARE
-// ============================
+// middleware
+// example
+const API_URL = "https://jewellers-shop-server.vercel.app";
 app.use(cors({
-    origin: ["http://localhost:5173"],
+    origin: [
+        "http://localhost:5173",
+        "https://jewellers-shop-client.web.app",
+        "https://your-vercel-url.vercel.app"
+    ],
     credentials: true
 }));
 app.use(express.json());
 
-// ============================
-// ✅ TEST ROUTE
-// ============================
-app.get("/", (req, res) => {
-    res.send("🚀 Server Running...");
-});
 
-// ============================
-// ✅ MONGODB
-// ============================
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.dios5i3.mongodb.net/?retryWrites=true&w=majority`;
 
+// Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
-    serverApi: ServerApiVersion.v1
+    serverApi: {
+        version: ServerApiVersion.v1,
+        strict: true,
+        deprecationErrors: true,
+    }
 });
 
-// ============================
-// 🚀 MAIN FUNCTION
-// ============================
 async function run() {
     try {
-        await client.connect();
-        console.log("✅ MongoDB Connected");
+        // Connect the client to the server	(optional starting in v4.7)
+        // await client.connect();
 
         const db = client.db("jewellersShop");
 
@@ -51,23 +48,22 @@ async function run() {
         const users = db.collection("users");
         const carts = db.collection("carts");
 
+        // jwt related api
+
         // ============================
         // 🔐 VERIFY TOKEN
         // ============================
         const verifyToken = (req, res, next) => {
-            const authHeader = req.headers.authorization;
-
-            if (!authHeader) {
+            if (!req.headers.authorization) {
                 return res.status(401).send({ message: "Unauthorized" });
             }
 
-            const token = authHeader.split(" ")[1];
+            const token = req.headers.authorization.split(" ")[1];
 
             jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
                 if (err) {
                     return res.status(403).send({ message: "Forbidden" });
                 }
-
                 req.user = decoded;
                 next();
             });
@@ -79,9 +75,11 @@ async function run() {
         app.post('/jwt', (req, res) => {
             const user = req.body;
 
-            const token = jwt.sign(user, process.env.JWT_SECRET, {
-                expiresIn: '1h'
-            });
+            const token = jwt.sign(
+                { email: user.email }, // only necessary data
+                process.env.JWT_SECRET,
+                { expiresIn: '1h' }
+            );
 
             res.send({ token });
         });
@@ -130,7 +128,7 @@ async function run() {
                 ana: Number(p.ana || 0),
                 rati: Number(p.rati || 0),
                 point: Number(p.point || 0),
-                buyPrice: Number(p.buyPrice),
+                buyPrice: Number(p.buyPrice || 0),
                 sellPrice: 0,
                 status: "stock",
                 image: p.image || "",
@@ -140,19 +138,24 @@ async function run() {
             res.send({ success: true, result });
         });
 
-        app.get('/products', async (req, res) => {
-            const result = await products
-                .find()
-                .sort({ createdAt: -1 })
-                .toArray();
+        app.get('/products', verifyToken, async (req, res) => {
+            try {
+                const result = await products
+                    .find()
+                    .sort({ createdAt: -1 }) // optional but better
+                    .toArray();
 
-            res.send(result);
+                res.send(result);
+            } catch (error) {
+                res.status(500).send({ message: "Server error" });
+            }
         });
 
         app.get('/products/:id', async (req, res) => {
             const product = await products.findOne({
                 _id: new ObjectId(req.params.id)
             });
+              console.log("API HIT");
 
             if (!product) {
                 return res.status(404).send({ message: "Product not found" });
@@ -221,26 +224,38 @@ async function run() {
         });
 
         app.post('/sell', async (req, res) => {
-            const item = req.body;
+            try {
+                const item = req.body;
 
-            await sales.insertOne({
-                ...item,
-                total: item.sellPrice,
-                profit: item.sellPrice - item.buyPrice,
-                date: new Date()
-            });
-
-            await products.updateOne(
-                { _id: new ObjectId(item._id) },
-                {
-                    $set: {
-                        status: "sold",
-                        sellPrice: item.sellPrice
-                    }
+                // ✅ ID validation আগে করো
+                if (!ObjectId.isValid(item._id)) {
+                    return res.status(400).send({ message: "Invalid ID" });
                 }
-            );
 
-            res.send({ success: true });
+                // ✅ sale insert
+                await sales.insertOne({
+                    ...item,
+                    total: Number(item.sellPrice || 0),
+                    profit: Number(item.sellPrice || 0) - Number(item.buyPrice || 0),
+                    date: new Date()
+                });
+
+                // ✅ product update
+                await products.updateOne(
+                    { _id: new ObjectId(item._id) },
+                    {
+                        $set: {
+                            status: "sold",
+                            sellPrice: Number(item.sellPrice || 0)
+                        }
+                    }
+                );
+
+                res.send({ success: true });
+
+            } catch (error) {
+                res.status(500).send({ message: "Server error" });
+            }
         });
 
         app.delete("/sales/:id", async (req, res) => {
@@ -416,17 +431,34 @@ async function run() {
             });
         });
 
-    } catch (error) {
-        console.log("❌ Error:", error);
+        // Send a ping to confirm a successful connection
+        // await client.db("admin").command({ ping: 1 });
+        // console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    } finally {
+        // Ensures that the client will close when you finish/error
+        // await client.close();
     }
 }
+run().catch(console.dir);
 
-run();
 
-// ============================
-// 🚀 SERVER START
-// ============================
-const port = process.env.PORT || 5000;
+app.get('/', (req, res) => {
+    res.send('laivin is sitting')
+})
+
 app.listen(port, () => {
-    console.log(`🚀 Server running on port ${port}`);
-});
+    console.log(`Laivin boss is sitting on port ${port}`);
+})
+
+/**
+ * --------------------------------
+ *      NAMING CONVENTION
+ * --------------------------------
+ * app.get('/users')
+ * app.get('/users/:id')
+ * app.post('/users')
+ * app.put('/users/:id')
+ * app.patch('/users/:id')
+ * app.delete('/users/:id')
+ * 
+*/

@@ -9,17 +9,28 @@
     "multer": "^2.1.1"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "@types/node": "^25.5.0",
+    "nodemon": "^3.1.14",
+    "vite-plugin-pwa": "^1.2.0"
   },
   "name": "jewellers-shop-server",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs"
+  "type": "commonjs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/faisal44447/jewellers-shop-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/faisal44447/jewellers-shop-server/issues"
+  },
+  "homepage": "https://github.com/faisal44447/jewellers-shop-server#readme"
 }
