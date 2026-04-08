@@ -48,8 +48,6 @@ async function run() {
         const users = db.collection("users");
         const carts = db.collection("carts");
 
-        // jwt related api
-
         // ============================
         // 🔐 VERIFY TOKEN
         // ============================
@@ -155,7 +153,7 @@ async function run() {
             const product = await products.findOne({
                 _id: new ObjectId(req.params.id)
             });
-              console.log("API HIT");
+            console.log("API HIT");
 
             if (!product) {
                 return res.status(404).send({ message: "Product not found" });
